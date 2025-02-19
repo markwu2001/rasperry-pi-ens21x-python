@@ -8,7 +8,7 @@ class ENS210:
 
         # Check device ID (recommended)
         device_id = self.read_byte(0x00)  # WHO_AM_I register
-        if device_id != 0x6A:  # ENS210 ID
+        if device_id != 0x0215:  # ENS210 ID
             raise RuntimeError("ENS210 not found at address 0x{:02x}".format(address))
 
     def read_byte(self, register):
