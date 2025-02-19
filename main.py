@@ -60,7 +60,7 @@ class ENS210:
 # Example Usage:
 if __name__ == "__main__":
     i2c_bus = 1  # Replace with your I2C bus number
-    ens210_address = 0x40  # Default ENS210 address
+    ens210_address = 0x47  # Default ENS210 address
 
     try:
         ens210 = ENS210(i2c_bus, ens210_address)
