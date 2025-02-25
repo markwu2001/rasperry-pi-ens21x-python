@@ -123,28 +123,49 @@ class ENS21x:
         self.set_low_power(True)
 
     def crc7(self, payload):
-        # Correct CRC-7 implementation matching ENS21x spec
-        crc = 0x7F  # Initial value
-        polynomial = 0x89 << 9  # Align polynomial with 17-bit data
-        
-        for i in range(17):
-            if (payload & (1 << (16 - i))):
-                crc ^= polynomial
-            polynomial >>= 1
-            if (crc & 0x10000):
-                crc ^= 0x89 << 9
-            crc <<= 1
-        
-        return (crc >> 10) & 0x7F  # Shift to get 7-bit CRC
+        """Direct translation of the original Arduino CRC implementation"""
+        CRC7WIDTH = 7
+        CRC7POLY = 0x89
+        CRC7IVEC = 0x7F
+        DATA7WIDTH = 17
+        DATA7MASK = (1 << DATA7WIDTH) - 1
+        DATA7MSB = 1 << (DATA7WIDTH - 1)
+
+        # Initial setup
+        pol = CRC7POLY
+        pol = pol << (DATA7WIDTH - CRC7WIDTH - 1)  # 17-7-1=9 → 0x89 << 9
+
+        bit = DATA7MSB
+        val = payload
+
+        # Make room for CRC value
+        val = val << CRC7WIDTH
+        bit = bit << CRC7WIDTH
+        pol = pol << CRC7WIDTH
+
+        # Insert initial vector
+        val |= CRC7IVEC
+
+        # Apply division
+        while bit & (DATA7MASK << CRC7WIDTH):
+            if bit & val:
+                val ^= pol
+            bit >>= 1
+            pol >>= 1
+
+        return val
 
     def check_data(self, data):
-        # Data is 24 bits: [7-bit CRC][1-bit valid][16-bit data]
-        crc_received = (data >> 16) & 0x7F
-        valid = (data >> 16) & 0x80  # MSB of the 24-bit word
-        payload = data & 0x1FFFF
-        
-        crc_calculated = self.crc7(payload)
-        
+        """Updated check_data matching original C++ implementation"""
+        data &= 0xFFFFFF  # Ensure 24-bit data
+        valid = (data >> 16) & 0x01
+        crc_received = (data >> 17) & 0x7F
+        payload = data & 0x1FFFF  # Original 17-bit payload
+
+        # Calculate CRC using the same method as Arduino
+        crc_result = self.crc7(payload)
+        crc_calculated = (crc_result >> 17) & 0x7F  # Extract upper 7 bits from result
+
         if crc_calculated == crc_received:
             return Result.STATUS_OK if valid else Result.STATUS_INVALID
         return Result.STATUS_CRC_ERROR
