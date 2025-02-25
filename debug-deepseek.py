@@ -1,11 +1,11 @@
-import ens21x_deepseek
+from ens21x_deepseek import ENS215
 import smbus2
 
 # Initialize I2C bus
 bus = smbus2.SMBus(1)
 
 # Initialize ENS21x sensor
-sensor = ENS215(bus, address=0x47)
+sensor = ENS215(bus, address=0x43)
 
 # Begin communication with the sensor
 if sensor.begin():
