@@ -110,6 +110,95 @@ class ENS21x:
     # Rest of the class remains the same...
     # [Keep all other methods from the original implementation]
 
+    def crc7(self, val):
+        crc7poly = 0x89
+        crc7width = 7
+        crc7ivec = 0x7F
+        data7width = 17
+
+        pol = crc7poly << (data7width - crc7width - 1)
+        bit = 1 << (data7width - 1)
+        val = (val << crc7width) | crc7ivec
+
+        pol <<= crc7width
+        bit <<= crc7width
+
+        while bit > (1 << (crc7width - 1)):
+            if val & bit:
+                val ^= pol
+            bit >>= 1
+            pol >>= 1
+
+        return (val >> (data7width)) & 0x7F
+
+    def check_data(self, data):
+        data &= 0xFFFFFF
+        valid = (data >> 16) & 0x01
+        stored_crc = (data >> 17) & 0x7F
+        payload = data & 0x1FFFF
+
+        computed_crc = self.crc7(payload)
+        if computed_crc == stored_crc:
+            return Result.STATUS_OK if valid else Result.STATUS_INVALID
+        return Result.STATUS_CRC_ERROR
+
+    # Debugging methods
+    def _debug(self, func, *args):
+        if self.debug_stream is None:
+            return
+
+        message = f"ENS21x debug -- {func}"
+        if isinstance(args[0], Result):
+            message += f" status: {args[0].value}"
+        elif isinstance(args[0], (list, bytes)):
+            data = ' '.join([f"0x{byte:02X}" for byte in args[0]])
+            status = args[1].value if len(args) > 1 else ''
+            message += f" {data} status: {status}"
+        print(message, file=self.debug_stream)
+
+    # Property accessors
+    @property
+    def part_id(self):
+        return self.part_id
+
+    @property
+    def die_rev(self):
+        return self.die_rev
+
+    @property
+    def uid(self):
+        return self.uid
+
+    def set_solder_correction(self, correction=50 * 64 // 1000):
+        self.solder_correction = correction
+
+    def get_temp_kelvin(self):
+        return (self.t_data - self.solder_correction) / 64.0
+
+    def get_temp_celsius(self):
+        return self.get_temp_kelvin() - 273.15
+
+    def get_temp_fahrenheit(self):
+        return (9.0 * (self.t_data - self.solder_correction) / 320.0) - 459.67
+
+    def get_humidity_percent(self):
+        return self.h_data / 512.0
+
+    def get_absolute_humidity_percent(self):
+        temp_c = self.get_temp_celsius()
+        rh = self.get_humidity_percent()
+        molar_mass = 18.01534
+        gas_constant = 8.21447215
+        saturation_pressure = 6.1121 * 2.718281828**((17.67 * temp_c) / (temp_c + 243.5))
+        absolute_humidity = (saturation_pressure * rh * molar_mass) / ((273.15 + temp_c) * gas_constant)
+        return absolute_humidity
+    
+    def set_low_power(self, enable):
+        if enable:
+            return self.write_register(RegisterAddress.SYS_CTRL, SystemControl.ENABLE_LOW_POWER)
+        else:
+            return self.write_register(RegisterAddress.SYS_CTRL, SystemControl.DISABLE_LOW_POWER)
+
     def read_identifiers(self):
         self.set_low_power(False)
         time.sleep(SystemTiming.BOOTING)
