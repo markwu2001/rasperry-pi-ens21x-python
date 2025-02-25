@@ -44,15 +44,21 @@ class ENS21x:
         self.solder_correction = 0
         self.debug_stream = None
 
-        self.part_id = 0
-        self.die_rev = 0
-        self.uid = 0
+        # Rename properties to avoid conflict
+        self._part_id = 0
+        self._die_rev = 0
+        self._uid = 0
         self.t_data = 0
         self.h_data = 0
         self.t_status = Result.STATUS_INVALID
         self.h_status = Result.STATUS_INVALID
 
         self.bus = smbus2.SMBus(self.bus_number)
+
+        try:
+            self.bus = smbus2.SMBus(self.bus_number)
+        except FileNotFoundError:
+            raise RuntimeError("I2C bus not found")
 
     def __del__(self):
         if hasattr(self, 'bus'):
@@ -216,15 +222,15 @@ class ENS21x:
     # Property accessors
     @property
     def part_id(self):
-        return self.part_id
+        return self._part_id
 
     @property
     def die_rev(self):
-        return self.die_rev
+        return self._die_rev
 
     @property
     def uid(self):
-        return self.uid
+        return self._uid
 
     def set_solder_correction(self, correction=50 * 64 // 1000):
         self.solder_correction = correction
