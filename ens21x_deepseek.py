@@ -123,50 +123,38 @@ class ENS21x:
         self.set_low_power(True)
 
     def crc7(self, payload):
-        """Direct translation of the original Arduino CRC implementation"""
-        CRC7WIDTH = 7
+        """Exact replica of the Arduino CRC-7 calculation"""
         CRC7POLY = 0x89
         CRC7IVEC = 0x7F
         DATA7WIDTH = 17
-        DATA7MASK = (1 << DATA7WIDTH) - 1
-        DATA7MSB = 1 << (DATA7WIDTH - 1)
+        CRC7WIDTH = 7
 
-        # Initial setup
-        pol = CRC7POLY
-        pol = pol << (DATA7WIDTH - CRC7WIDTH - 1)  # 17-7-1=9 → 0x89 << 9
+        # Align polynomial with data width
+        pol = CRC7POLY << (DATA7WIDTH - CRC7WIDTH - 1)  # 0x89 << 9 = 0x4480
+        bit = 1 << (DATA7WIDTH - 1)                     # 0x10000
+        mask = (1 << (DATA7WIDTH + CRC7WIDTH)) - 1       # 24-bit mask
 
-        bit = DATA7MSB
-        val = payload
+        # Prepare the value with initial vector
+        val = (payload << CRC7WIDTH) | CRC7IVEC
 
-        # Make room for CRC value
-        val = val << CRC7WIDTH
-        bit = bit << CRC7WIDTH
-        pol = pol << CRC7WIDTH
-
-        # Insert initial vector
-        val |= CRC7IVEC
-
-        # Apply division
-        while bit & (DATA7MASK << CRC7WIDTH):
-            if bit & val:
-                val ^= pol
+        # Apply polynomial division
+        while (bit << CRC7WIDTH) & mask:
+            if (bit << CRC7WIDTH) & val:
+                val ^= pol << CRC7WIDTH
             bit >>= 1
             pol >>= 1
 
-        return val
+        # Extract CRC from upper 7 bits
+        return (val >> 17) & 0x7F
 
     def check_data(self, data):
-        """Updated check_data matching original C++ implementation"""
-        data &= 0xFFFFFF  # Ensure 24-bit data
+        """Updated data validation matching original logic"""
+        data &= 0xFFFFFF  # Ensure 24-bit value
         valid = (data >> 16) & 0x01
         crc_received = (data >> 17) & 0x7F
         payload = data & 0x1FFFF  # Original 17-bit payload
 
-        # Calculate CRC using the same method as Arduino
-        crc_result = self.crc7(payload)
-        crc_calculated = (crc_result >> 17) & 0x7F  # Extract upper 7 bits from result
-
-        if crc_calculated == crc_received:
+        if self.crc7(payload) == crc_received:
             return Result.STATUS_OK if valid else Result.STATUS_INVALID
         return Result.STATUS_CRC_ERROR
 
