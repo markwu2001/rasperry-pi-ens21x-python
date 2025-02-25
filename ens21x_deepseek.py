@@ -7,10 +7,10 @@ class RegisterAddress(IntEnum):
     DIE_REV     = 0x01
     UID         = 0x04
     SYS_CTRL    = 0x10
-    SENS_START  = 0x11
-    SENS_RUN    = 0x12
+    SENS_START  = 0x22
+    SENS_RUN    = 0x21
     SENS_STOP   = 0x13
-    T_VAL       = 0x20
+    T_VAL       = 0x30
 
 class SystemControl(IntEnum):
     RESET           = 0x80
