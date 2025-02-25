@@ -69,17 +69,17 @@ class ENS21x:
         if isinstance(data, Result):
             return data
         
-        # Process raw bytes
-        t_raw = int.from_bytes(data[:3], byteorder='little')
-        h_raw = int.from_bytes(data[3:], byteorder='little')
+        # Process as big-endian based on sensor's byte order
+        t_raw = int.from_bytes(data[:3], byteorder='big')
+        h_raw = int.from_bytes(data[3:], byteorder='big')
         
         self.t_status = self.check_data(t_raw)
         self.h_status = self.check_data(h_raw)
         
         if self.t_status == Result.STATUS_OK:
-            self.t_data = (t_raw >> 7) & 0xFFFF
+            self.t_data = (t_raw & 0xFFFF) >> 7
         if self.h_status == Result.STATUS_OK:
-            self.h_data = (h_raw >> 7) & 0xFFFF
+            self.h_data = (h_raw & 0xFFFF) >> 7
         
         self.debug(f"Update result: T-{self.t_status}, H-{self.h_status}")
         return Result.STATUS_OK
@@ -116,24 +116,22 @@ class ENS21x:
             self.uid = int.from_bytes(uid_data, byteorder='little')
         
         self.set_low_power(True)
-        print(f"Identifiers: PID-{self.part_id}, REV-{self.die_rev}, UID-{self.uid}")
+        # print(f"Identifiers: PID-{self.part_id}, REV-{self.die_rev}, UID-{self.uid}")
         self.debug(f"Identifiers: PID-{self.part_id}, REV-{self.die_rev}, UID-{self.uid}")
 
     def crc7(self, payload):
-        crc = 0x7F
-        polynomial = 0x89 << 15
+        # Corrected CRC-7 implementation matching the sensor's spec
+        crc = 0x7F  # Initial value
+        polynomial = 0x89 << 9  # Align polynomial with 17-bit payload
         
-        for _ in range(17):
-            if (payload & 0x10000) != 0:
+        for i in range(17):
+            if (payload & (1 << (16 - i))):
                 crc ^= polynomial
-            payload <<= 1
-            polynomial >>= 1
+            if crc & 0x10000:
+                crc ^= 0x89 << 9
+            crc = (crc << 1) & 0x1FFFF  # Maintain 17-bit operations
             
-            if (crc & 0x10000) != 0:
-                crc ^= 0x89 << 8
-            crc <<= 1
-        
-        return (crc >> 9) & 0x7F
+        return (crc >> 10) & 0x7F  # Extract 7-bit CRC
 
     def check_data(self, data):
         valid = (data >> 16) & 0x01
@@ -148,7 +146,7 @@ class ENS21x:
         try:
             data = self.bus.read_i2c_block_data(self.address, register, length)
             self.debug(f"Read {register}: {bytes(data)}")
-            return data  # Return raw bytes instead of converting to int
+            return data
         except IOError:
             return Result.STATUS_I2C_ERROR
 
