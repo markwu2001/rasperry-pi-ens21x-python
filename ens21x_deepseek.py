@@ -119,6 +119,7 @@ class ENS21x:
         if not isinstance(uid_data, Result):
             self.uid = int.from_bytes(uid_data, byteorder='little')
         
+        print(f"Identifiers: PID-{hex(self.part_id)}, REV-{hex(self.die_rev)}, UID-{hex(self.uid)}")
         self.debug(f"Identifiers: PID-{hex(self.part_id)}, REV-{hex(self.die_rev)}, UID-{hex(self.uid)}")
         self.set_low_power(True)
 
