@@ -201,15 +201,3 @@ class ENS215(ENS21x):
     def is_connected(self):
         return self.part_id == 0x0215
     
-
-sensor = ENS215(bus_num=1)
-if sensor.begin():
-    print("Sensor connected!")
-    
-    # Single shot measurement
-    result = sensor.single_shot_measure(Sensor.TEMPERATURE_AND_HUMIDITY)
-    if result == Result.STATUS_OK:
-        print(f"Temperature: {sensor.temperature_celsius:.2f}°C")
-        print(f"Humidity: {sensor.humidity_percent:.2f}%")
-else:
-    print("Sensor not found!")
