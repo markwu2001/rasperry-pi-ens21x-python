@@ -44,19 +44,15 @@ class ENS21x:
         self.solder_correction = 0
         self.debug_stream = None
 
-        # Rename properties to avoid conflict
-        self._part_id = 0
-        self._die_rev = 0
-        self._uid = 0
+        self.part_id = 0
+        self.die_rev = 0
+        self.uid = 0
         self.t_data = 0
         self.h_data = 0
         self.t_status = Result.STATUS_INVALID
         self.h_status = Result.STATUS_INVALID
 
-        try:
-            self.bus = smbus2.SMBus(self.bus_number)
-        except FileNotFoundError:
-            raise RuntimeError("I2C bus not found")
+        self.bus = smbus2.SMBus(self.bus_number)
 
     def __del__(self):
         if hasattr(self, 'bus'):
@@ -68,19 +64,6 @@ class ENS21x:
 
     def is_connected(self):
         raise NotImplementedError("Subclasses must implement this method")
-
-    # Add property getters
-    @property
-    def part_id(self):
-        return self._part_id
-
-    @property
-    def die_rev(self):
-        return self._die_rev
-
-    @property
-    def uid(self):
-        return self._uid
 
     def enable_debugging(self, debug_stream):
         self.debug_stream = debug_stream
@@ -107,8 +90,82 @@ class ENS21x:
         self._debug("update", Result.STATUS_OK)
         return Result.STATUS_OK
 
-    # Rest of the class remains the same...
-    # [Keep all other methods from the original implementation]
+    def single_shot_measure(self, sensor=Sensor.TEMPERATURE_AND_HUMIDITY):
+        result = self.write_register(RegisterAddress.SENS_START, sensor)
+        if result != Result.STATUS_OK:
+            return result
+
+        result = self.update(SystemTiming.CONVERSION_SINGLE_SHOT)
+        if result != Result.STATUS_OK:
+            return result
+
+        if sensor == Sensor.TEMPERATURE:
+            return self.t_status
+        elif sensor == Sensor.HUMIDITY:
+            return self.h_status
+        else:
+            return self.t_status if self.t_status != Result.STATUS_OK else self.h_status
+
+    def start_continuous_measure(self, sensor=Sensor.TEMPERATURE_AND_HUMIDITY):
+        result = self.write_register(RegisterAddress.SENS_RUN, sensor)
+        if result == Result.STATUS_OK:
+            return self.single_shot_measure(sensor)
+        return result
+
+    def stop_continuous_measure(self, sensor=Sensor.TEMPERATURE_AND_HUMIDITY):
+        return self.write_register(RegisterAddress.SENS_STOP, sensor)
+
+    def set_low_power(self, enable):
+        if enable:
+            return self.write_register(RegisterAddress.SYS_CTRL, SystemControl.ENABLE_LOW_POWER)
+        else:
+            return self.write_register(RegisterAddress.SYS_CTRL, SystemControl.DISABLE_LOW_POWER)
+
+    def reset(self):
+        result = self.write_register(RegisterAddress.SYS_CTRL, SystemControl.RESET)
+        if result == Result.STATUS_OK:
+            time.sleep(SystemTiming.BOOTING)
+        return result
+
+    def read_register(self, register, length):
+        try:
+            msg = smbus2.i2c_msg.write(self.address, [register])
+            self.bus.i2c_rdwr(msg)
+            msg = smbus2.i2c_msg.read(self.address, length)
+            self.bus.i2c_rdwr(msg)
+            data = list(msg)
+            self._debug("read", data, Result.STATUS_OK)
+            return data
+        except Exception as e:
+            self._debug("read", None, Result.STATUS_I2C_ERROR)
+            return []
+
+    def write_register(self, register, data):
+        try:
+            if not isinstance(data, list):
+                data = [data]
+            msg = smbus2.i2c_msg.write(self.address, [register] + data)
+            self.bus.i2c_rdwr(msg)
+            self._debug("write", data, Result.STATUS_OK)
+            return Result.STATUS_OK
+        except Exception as e:
+            self._debug("write", None, Result.STATUS_I2C_ERROR)
+            return Result.STATUS_I2C_ERROR
+
+    def read_identifiers(self):
+        self.set_low_power(False)
+        time.sleep(SystemTiming.BOOTING)
+
+        part_id = self.read_register(RegisterAddress.PART_ID, 2)
+        self.part_id = struct.unpack('<H', bytes(part_id))[0] if len(part_id) == 2 else 0
+
+        die_rev = self.read_register(RegisterAddress.DIE_REV, 2)
+        self.die_rev = struct.unpack('<H', bytes(die_rev))[0] if len(die_rev) == 2 else 0
+
+        uid = self.read_register(RegisterAddress.UID, 8)
+        self.uid = struct.unpack('<Q', bytes(uid))[0] if len(uid) == 8 else 0
+
+        self.set_low_power(True)
 
     def crc7(self, val):
         crc7poly = 0x89
@@ -192,27 +249,6 @@ class ENS21x:
         saturation_pressure = 6.1121 * 2.718281828**((17.67 * temp_c) / (temp_c + 243.5))
         absolute_humidity = (saturation_pressure * rh * molar_mass) / ((273.15 + temp_c) * gas_constant)
         return absolute_humidity
-    
-    def set_low_power(self, enable):
-        if enable:
-            return self.write_register(RegisterAddress.SYS_CTRL, SystemControl.ENABLE_LOW_POWER)
-        else:
-            return self.write_register(RegisterAddress.SYS_CTRL, SystemControl.DISABLE_LOW_POWER)
-
-    def read_identifiers(self):
-        self.set_low_power(False)
-        time.sleep(SystemTiming.BOOTING)
-
-        part_id = self.read_register(RegisterAddress.PART_ID, 2)
-        self._part_id = struct.unpack('<H', bytes(part_id))[0] if len(part_id) == 2 else 0
-
-        die_rev = self.read_register(RegisterAddress.DIE_REV, 2)
-        self._die_rev = struct.unpack('<H', bytes(die_rev))[0] if len(die_rev) == 2 else 0
-
-        uid = self.read_register(RegisterAddress.UID, 8)
-        self._uid = struct.unpack('<Q', bytes(uid))[0] if len(uid) == 8 else 0
-
-        self.set_low_power(True)
 
 class ENS215(ENS21x):
     def __init__(self, bus_number=1, address=0x47):

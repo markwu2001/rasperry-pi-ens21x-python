@@ -1,7 +1,20 @@
-from ens21x_deepseek import ENS215, ENS21x
+from ens21x_deepseek import ENS215, Sensor, Result
+import smbus2
 
-ens = ENS215(bus_number=1)
-ens.begin()
-ens.single_shot_measure()
-print(f"Temperature: {ens.get_temp_celsius()}°C")
-print(f"Humidity: {ens.get_humidity_percent()}%")
+# Initialize I2C bus
+bus = smbus2.SMBus(1)
+
+# Initialize ENS21x sensor
+sensor = ENS215(bus, address=0x43)
+if sensor.begin():
+    print("Sensor connected successfully!")
+    
+    # Perform a single shot measurement
+    result = sensor.single_shot_measure()
+    if result == ENS215.Result.STATUS_OK:
+        print(f"Temperature: {sensor.get_temp_celsius()} °C")
+        print(f"Humidity: {sensor.get_humidity_percent()} %RH")
+    else:
+        print("Measurement failed!")
+else:
+    print("Failed to connect to the sensor!")
