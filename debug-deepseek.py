@@ -1,4 +1,4 @@
-from ens21x_deepseek import ENS215
+from ens21x_deepseek import ENS215, ENS21x
 
 ens = ENS215(bus_number=1)
 ens.begin()
