@@ -69,17 +69,17 @@ class ENS21x:
         if isinstance(data, Result):
             return data
         
-        # Process as big-endian based on sensor's byte order
-        t_raw = int.from_bytes(data[:3], byteorder='big')
-        h_raw = int.from_bytes(data[3:], byteorder='big')
+        # Process as little-endian 24-bit values
+        t_raw = int.from_bytes(data[:3], byteorder='little')
+        h_raw = int.from_bytes(data[3:6], byteorder='little')
         
         self.t_status = self.check_data(t_raw)
         self.h_status = self.check_data(h_raw)
         
         if self.t_status == Result.STATUS_OK:
-            self.t_data = (t_raw & 0xFFFF) >> 7
+            self.t_data = (t_raw & 0xFFFF) >> 7  # Extract 16-bit temperature data
         if self.h_status == Result.STATUS_OK:
-            self.h_data = (h_raw & 0xFFFF) >> 7
+            self.h_data = (h_raw & 0xFFFF) >> 7  # Extract 16-bit humidity data
         
         self.debug(f"Update result: T-{self.t_status}, H-{self.h_status}")
         return Result.STATUS_OK
@@ -102,43 +102,50 @@ class ENS21x:
 
     def read_identifiers(self):
         self.set_low_power(False)
-        time.sleep(SystemTiming.BOOTING)
+        time.sleep(0.1)  # Add stabilization delay
         
+        # Read part ID (16-bit little-endian)
         part_id_data = self.read_register(RegisterAddress.PART_ID, 2)
-        die_rev_data = self.read_register(RegisterAddress.DIE_REV, 2)
-        uid_data = self.read_register(RegisterAddress.UID, 6)
-        
         if not isinstance(part_id_data, Result):
             self.part_id = int.from_bytes(part_id_data, byteorder='little')
+        
+        # Read die revision (16-bit little-endian)
+        die_rev_data = self.read_register(RegisterAddress.DIE_REV, 2)
         if not isinstance(die_rev_data, Result):
             self.die_rev = int.from_bytes(die_rev_data, byteorder='little')
+        
+        # Read UID (48-bit little-endian)
+        uid_data = self.read_register(RegisterAddress.UID, 6)
         if not isinstance(uid_data, Result):
             self.uid = int.from_bytes(uid_data, byteorder='little')
         
+        self.debug(f"Identifiers: PID-{hex(self.part_id)}, REV-{hex(self.die_rev)}, UID-{hex(self.uid)}")
         self.set_low_power(True)
-        print(f"Identifiers: PID-{self.part_id}, REV-{self.die_rev}, UID-{self.uid}")
-        self.debug(f"Identifiers: PID-{self.part_id}, REV-{self.die_rev}, UID-{self.uid}")
 
     def crc7(self, payload):
-        # Corrected CRC-7 implementation matching the sensor's spec
+        # Correct CRC-7 implementation matching ENS21x spec
         crc = 0x7F  # Initial value
-        polynomial = 0x89 << 9  # Align polynomial with 17-bit payload
+        polynomial = 0x89 << 9  # Align polynomial with 17-bit data
         
         for i in range(17):
             if (payload & (1 << (16 - i))):
                 crc ^= polynomial
-            if crc & 0x10000:
+            polynomial >>= 1
+            if (crc & 0x10000):
                 crc ^= 0x89 << 9
-            crc = (crc << 1) & 0x1FFFF  # Maintain 17-bit operations
-            
-        return (crc >> 10) & 0x7F  # Extract 7-bit CRC
+            crc <<= 1
+        
+        return (crc >> 10) & 0x7F  # Shift to get 7-bit CRC
 
     def check_data(self, data):
-        valid = (data >> 16) & 0x01
-        crc = (data >> 17) & 0x7F
+        # Data is 24 bits: [7-bit CRC][1-bit valid][16-bit data]
+        crc_received = (data >> 16) & 0x7F
+        valid = (data >> 16) & 0x80  # MSB of the 24-bit word
         payload = data & 0x1FFFF
         
-        if self.crc7(payload) == crc:
+        crc_calculated = self.crc7(payload)
+        
+        if crc_calculated == crc_received:
             return Result.STATUS_OK if valid else Result.STATUS_INVALID
         return Result.STATUS_CRC_ERROR
 
