@@ -81,6 +81,7 @@ class ENS21x:
         if self.h_status == Result.STATUS_OK:
             self.h_data = (h_raw & 0xFFFF) >> 7  # Extract 16-bit humidity data
         
+        self.debug(f"t_raw, h_raw: T-{t_raw}, H-{h_raw}")
         self.debug(f"Update result: T-{self.t_status}, H-{self.h_status}")
         return Result.STATUS_OK
 
