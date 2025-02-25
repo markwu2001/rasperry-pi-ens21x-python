@@ -2,8 +2,9 @@ from ens21x_deepseek import ENS215, Sensor, Result
 import time
 
 sensor = ENS215(bus=1)
+sensor.enable_debugging()
+
 if sensor.begin():
-    sensor.enable_debugging()
     
     # Ensure sensor is out of low power mode
     sensor.set_low_power(False)
