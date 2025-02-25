@@ -64,11 +64,12 @@ class ENS21x:
 
     def update(self, delay_seconds=SystemTiming.CONVERSION_CONTINUOUS):
         time.sleep(delay_seconds)
-        try:
-            data = self.read_register(RegisterAddress.T_VAL, 6)
-        except IOError:
-            return Result.STATUS_I2C_ERROR
+        data = self.read_register(RegisterAddress.T_VAL, 6)
         
+        if isinstance(data, Result):
+            return data
+        
+        # Process raw bytes
         t_raw = int.from_bytes(data[:3], byteorder='little')
         h_raw = int.from_bytes(data[3:], byteorder='little')
         
@@ -103,9 +104,16 @@ class ENS21x:
         self.set_low_power(False)
         time.sleep(SystemTiming.BOOTING)
         
-        self.part_id = self.read_register(RegisterAddress.PART_ID, 2)
-        self.die_rev = self.read_register(RegisterAddress.DIE_REV, 2)
-        self.uid = self.read_register(RegisterAddress.UID, 6)
+        part_id_data = self.read_register(RegisterAddress.PART_ID, 2)
+        die_rev_data = self.read_register(RegisterAddress.DIE_REV, 2)
+        uid_data = self.read_register(RegisterAddress.UID, 6)
+        
+        if not isinstance(part_id_data, Result):
+            self.part_id = int.from_bytes(part_id_data, byteorder='little')
+        if not isinstance(die_rev_data, Result):
+            self.die_rev = int.from_bytes(die_rev_data, byteorder='little')
+        if not isinstance(uid_data, Result):
+            self.uid = int.from_bytes(uid_data, byteorder='little')
         
         self.set_low_power(True)
         self.debug(f"Identifiers: PID-{self.part_id}, REV-{self.die_rev}, UID-{self.uid}")
@@ -139,13 +147,13 @@ class ENS21x:
         try:
             data = self.bus.read_i2c_block_data(self.address, register, length)
             self.debug(f"Read {register}: {bytes(data)}")
-            return int.from_bytes(data, byteorder='little')
+            return data  # Return raw bytes instead of converting to int
         except IOError:
             return Result.STATUS_I2C_ERROR
 
     def write_register(self, register, value):
         try:
-            if isinstance(value, int):
+            if isinstance(value, (int, IntEnum)):
                 self.bus.write_byte_data(self.address, register, value)
             else:
                 self.bus.write_i2c_block_data(self.address, register, list(value.to_bytes(2, 'little')))
