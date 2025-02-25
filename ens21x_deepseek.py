@@ -116,7 +116,7 @@ class ENS21x:
             self.uid = int.from_bytes(uid_data, byteorder='little')
         
         self.set_low_power(True)
-        # print(f"Identifiers: PID-{self.part_id}, REV-{self.die_rev}, UID-{self.uid}")
+        print(f"Identifiers: PID-{self.part_id}, REV-{self.die_rev}, UID-{self.uid}")
         self.debug(f"Identifiers: PID-{self.part_id}, REV-{self.die_rev}, UID-{self.uid}")
 
     def crc7(self, payload):
