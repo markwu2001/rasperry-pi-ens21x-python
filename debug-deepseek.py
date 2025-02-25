@@ -5,7 +5,7 @@ import smbus2
 bus = smbus2.SMBus(1)
 
 # Initialize ENS21x sensor
-sensor = ENS215(bus, address=0x43)
+sensor = ENS215(bus, address=0x47)
 if sensor.begin():
     print("Sensor connected successfully!")
     
