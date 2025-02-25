@@ -135,7 +135,6 @@ class ENS21x:
         time.sleep(SystemTiming.BOOTING / 1000)
         
         self.part_id = int.from_bytes(self.read_register(RegisterAddress.PART_ID, 2), byteorder='little')
-        print("self Part ID", self.part_id)
         self.die_rev = int.from_bytes(self.read_register(RegisterAddress.DIE_REV, 2), byteorder='little')
         self.uid = int.from_bytes(self.read_register(RegisterAddress.UID, 8), byteorder='little')
         
